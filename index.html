@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agency File Count Tracker</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .spinner { border-top-color: #3498db; animation: spin 1s linear infinite; }
+        #detailsModal.hidden, .hidden { display: none; }
+        .th { padding: 0.75rem 1.5rem; text-align: left; font-size: 0.75rem; font-weight: 500; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
+        .td { padding: 1rem 1.5rem; white-space: nowrap; font-size: 0.875rem; color: #334155; }
+        .td-wrap { padding: 1rem 1.5rem; white-space: pre-wrap; font-size: 0.875rem; color: #475569; }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 flex items-center justify-center min-h-screen">
+
+    <!-- App Container -->
+    <div class="container mx-auto p-4 max-w-6xl">
+
+        <!-- Login View -->
+        <div id="loginView">
+            <div class="bg-white shadow-2xl rounded-xl p-8 max-w-md mx-auto">
+                <h1 class="text-3xl font-extrabold text-slate-900 text-center">Agency Login</h1>
+                <p class="text-slate-500 text-center mt-2">Enter your email to view performance.</p>
+                <div class="mt-8">
+                    <input type="email" id="emailInput" class="w-full p-3 border border-slate-300 rounded-md shadow-sm focus:ring-2 focus:ring-blue-500" placeholder="your.email@example.com">
+                    <button id="loginBtn" class="w-full mt-4 bg-blue-600 text-white font-semibold py-3 px-6 rounded-md shadow-md hover:bg-blue-700">Login</button>
+                    <div id="loginError" class="hidden mt-4 bg-red-100 border-red-400 text-red-700 px-4 py-3 rounded-md text-sm"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Dashboard View -->
+        <div id="dashboardView" class="hidden">
+            <!-- Header Section -->
+            <header class="bg-white shadow-md rounded-xl p-6 md:p-8 mb-8">
+                 <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+                    <div>
+                        <h1 class="text-3xl md:text-5xl font-extrabold text-slate-900">Performance</h1>
+                        <p id="welcomeMessage" class="text-slate-600 mt-2 text-lg"></p>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <select id="agentSelector" class="p-2 border border-slate-300 rounded-md shadow-sm focus:ring-2 focus:ring-blue-500">
+                            <!-- Agent options will be populated here -->
+                        </select>
+                        <button id="logoutBtn" class="bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-md hover:bg-slate-300">Logout</button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Results Section -->
+            <div id="resultsContainer">
+                <div id="loading" class="text-center py-12">
+                    <div class="spinner w-16 h-16 border-4 border-slate-200 rounded-full mx-auto"></div>
+                    <p class="mt-4 text-slate-500 text-lg">Fetching performance data...</p>
+                </div>
+                <div id="error" class="hidden bg-red-100 border-red-400 text-red-700 px-4 py-3 rounded-md" role="alert">
+                    <strong class="font-bold">Data Error!</strong>
+                    <span class="block sm:inline" id="errorMessage"></span>
+                </div>
+                
+                <!-- Main Content Area -->
+                <div id="mainContent" class="hidden">
+                    <!-- Performance Card -->
+                    <div id="data" class="mb-8"></div>
+                    <!-- Quarterly Analysis -->
+                    <div class="bg-white shadow-md rounded-xl p-6">
+                        <h2 class="text-2xl font-bold text-slate-800 mb-4">Quarterly Analysis (Current Year)</h2>
+                        <div id="quarterlyAnalysis" class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                            <!-- Quarterly cards will be inserted here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Details Modal -->
+    <div id="detailsModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col">
+            <div class="flex justify-between items-center p-4 border-b">
+                <h2 id="modalTitle" class="text-2xl font-bold text-slate-800">File Details</h2>
+                <button id="closeModalBtn" class="text-slate-500 hover:text-slate-800 text-3xl leading-none">&times;</button>
+            </div>
+            <div class="p-6 overflow-y-auto">
+                <div class="overflow-x-auto">
+                    <table id="detailsTable" class="min-w-full divide-y divide-slate-200">
+                        <thead class="bg-slate-50"><tr><th class="th">Ref Num</th><th class="th">Client Name</th><th class="th">Prop Address</th><th class="th">LA / PP</th></tr></thead>
+                        <tbody id="detailsTableBody" class="bg-white divide-y divide-slate-200"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Global State ---
+        let allAgencyRecords = [];
+        let loggedInUser = null;
+
+        // --- DOM Elements ---
+        const loginView = document.getElementById('loginView'), dashboardView = document.getElementById('dashboardView');
+        const emailInput = document.getElementById('emailInput'), loginBtn = document.getElementById('loginBtn');
+        const logoutBtn = document.getElementById('logoutBtn'), loginError = document.getElementById('loginError');
+        const welcomeMessage = document.getElementById('welcomeMessage'), agentSelector = document.getElementById('agentSelector');
+        const loading = document.getElementById('loading'), errorContainer = document.getElementById('error');
+        const errorMessage = document.getElementById('errorMessage'), dataContainer = document.getElementById('data');
+        const mainContent = document.getElementById('mainContent'), quarterlyAnalysis = document.getElementById('quarterlyAnalysis');
+        const modal = document.getElementById('detailsModal'), modalTitle = document.getElementById('modalTitle');
+        const closeModalBtn = document.getElementById('closeModalBtn'), detailsTableBody = document.getElementById('detailsTableBody');
+
+        // --- URL for the deployed Google Apps Script ---
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxrcOGVn0qNuLM7PpVUObnBsNZ9uSTyecflsIIsORpfr0SU1HxKvBo_GTpoB7jZ0dWHTg/exec';
+
+        // --- Core Functions ---
+        async function handleLogin() {
+            const email = emailInput.value.trim().toLowerCase();
+            if (!email) { showLoginError("Please enter an email address."); return; }
+            setLoginButtonState(true);
+            try {
+                const url = `${APPS_SCRIPT_URL}?action=login&email=${encodeURIComponent(email)}`;
+                const response = await fetch(url);
+                const result = await response.json();
+                if (result.status === 'success' && result.data.agency) {
+                    loggedInUser = { email: email, agency: result.data.agency };
+                    sessionStorage.setItem('loggedInUser', JSON.stringify(loggedInUser));
+                    await showDashboard();
+                } else {
+                    throw new Error(result.message || "Login failed.");
+                }
+            } catch (err) {
+                showLoginError(err.message);
+            } finally {
+                setLoginButtonState(false);
+            }
+        }
+
+        function handleLogout() {
+            loggedInUser = null;
+            sessionStorage.removeItem('loggedInUser');
+            showLoginView();
+        }
+
+        async function showDashboard() {
+            loginView.classList.add('hidden');
+            dashboardView.classList.remove('hidden');
+            welcomeMessage.textContent = `Welcome, ${loggedInUser.agency}!`;
+            await loadDashboardData();
+        }
+
+        function showLoginView() {
+            dashboardView.classList.add('hidden');
+            loginView.classList.remove('hidden');
+            emailInput.value = '';
+        }
+
+        async function loadDashboardData() {
+            loading.classList.remove('hidden');
+            mainContent.classList.add('hidden');
+            errorContainer.classList.add('hidden');
+            try {
+                const url = `${APPS_SCRIPT_URL}?action=getData&agency=${encodeURIComponent(loggedInUser.agency)}`;
+                const response = await fetch(url);
+                const result = await response.json();
+                if (result.status === 'success') {
+                    allAgencyRecords = result.data;
+                    populateAgentSelector(allAgencyRecords);
+                    updateDisplay(); // Initial display for "All Agents"
+                    mainContent.classList.remove('hidden');
+                } else {
+                    throw new Error(result.message || 'Failed to load agency data.');
+                }
+            } catch (err) {
+                showError(err.message);
+            } finally {
+                loading.classList.add('hidden');
+            }
+        }
+        
+        function updateDisplay() {
+            const selectedAgent = agentSelector.value;
+            const filteredRecords = selectedAgent === 'All Agents' 
+                ? allAgencyRecords 
+                : allAgencyRecords.filter(rec => rec.agents === selectedAgent);
+            
+            displayPerformanceCard(filteredRecords, selectedAgent);
+            displayQuarterlyAnalysis(filteredRecords);
+        }
+
+        // --- UI and Helper Functions ---
+        function populateAgentSelector(records) {
+            const agents = [...new Set(records.map(rec => rec.agents).filter(Boolean))].sort();
+            agentSelector.innerHTML = '<option>All Agents</option>';
+            agents.forEach(agent => {
+                agentSelector.innerHTML += `<option value="${agent}">${agent}</option>`;
+            });
+        }
+        
+        function formatCurrency(number) {
+            // The script now sends a number, so we just need to format it.
+            const numericValue = typeof number === 'number' ? number : 0;
+            return new Intl.NumberFormat('en-MY', { style: 'currency', currency: 'MYR' }).format(numericValue);
+        }
+
+        function displayPerformanceCard(records, name) {
+            const totalFiles = records.length;
+            // The script now sends la_pp as a number, so we can sum it directly.
+            const totalAmount = records.reduce((sum, record) => sum + (record.la_pp || 0), 0);
+
+            dataContainer.innerHTML = `
+                <div class="bg-white p-6 rounded-xl shadow-md hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer" onclick="showDetails(null, null)">
+                    <h3 class="text-xl font-bold text-slate-800 truncate">${name}</h3>
+                    <div class="mt-4 flex justify-between items-baseline">
+                        <div>
+                            <p class="text-5xl font-extrabold text-blue-600">${totalFiles}</p>
+                            <p class="text-slate-500 text-sm mt-1">File(s)</p>
+                        </div>
+                        <div class="text-right">
+                             <p class="text-2xl font-bold text-green-600">${formatCurrency(totalAmount)}</p>
+                             <p class="text-slate-500 text-sm mt-1">Total LA / PP</p>
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        function displayQuarterlyAnalysis(records) {
+            const quarters = { Q1: 0, Q2: 0, Q3: 0, Q4: 0 };
+            const currentYear = new Date().getFullYear();
+            records.forEach(rec => {
+                if (rec.submission_date) {
+                    const date = new Date(rec.submission_date);
+                    if (date.getFullYear() === currentYear) {
+                        const month = date.getMonth();
+                        if (month < 3) quarters.Q1++;
+                        else if (month < 6) quarters.Q2++;
+                        else if (month < 9) quarters.Q3++;
+                        else quarters.Q4++;
+                    }
+                }
+            });
+            quarterlyAnalysis.innerHTML = Object.entries(quarters).map(([q, count]) => `
+                <div class="bg-slate-50 p-4 rounded-lg hover:bg-slate-200 cursor-pointer transition" onclick="showDetails(null, '${q}')">
+                    <div class="text-slate-500 font-bold">${q}</div>
+                    <div class="text-3xl font-bold text-slate-800 mt-2">${count}</div>
+                </div>`).join('');
+        }
+        
+        function showDetails(agentName = null, quarter = null) {
+            let records = allAgencyRecords;
+            const selectedAgent = agentName || agentSelector.value;
+            let title = selectedAgent;
+
+            if (selectedAgent !== 'All Agents') {
+                records = records.filter(rec => rec.agents === selectedAgent);
+            }
+
+            if (quarter) {
+                const currentYear = new Date().getFullYear();
+                records = records.filter(rec => {
+                    if (!rec.submission_date) return false;
+                    const date = new Date(rec.submission_date);
+                    if (date.getFullYear() !== currentYear) return false;
+                    const month = date.getMonth();
+                    if (quarter === 'Q1' && month < 3) return true;
+                    if (quarter === 'Q2' && month >= 3 && month < 6) return true;
+                    if (quarter === 'Q3' && month >= 6 && month < 9) return true;
+                    if (quarter === 'Q4' && month >= 9) return true;
+                    return false;
+                });
+                title += ` - ${quarter} Details`;
+            } else {
+                 title += ' - File Details';
+            }
+            
+            modalTitle.textContent = title;
+            detailsTableBody.innerHTML = records.length ? records.map(rec => `
+                <tr>
+                    <td class="td">${rec.ref_num || 'N/A'}</td>
+                    <td class="td-wrap">${rec.client_name || 'N/A'}</td>
+                    <td class="td">${rec.prop_address || 'N/A'}</td>
+                    <td class="td">${formatCurrency(rec.la_pp)}</td>
+                </tr>`).join('') : '<tr><td colspan="4" class="text-center p-4">No files found for this selection.</td></tr>';
+            modal.classList.remove('hidden');
+        }
+
+        function setLoginButtonState(isLoggingIn) {
+            loginBtn.disabled = isLoggingIn;
+            loginBtn.textContent = isLoggingIn ? 'Logging in...' : 'Login';
+        }
+        
+        function showLoginError(message) { loginError.textContent = message; loginError.classList.remove('hidden'); }
+        function showError(message) { errorMessage.textContent = message; errorContainer.classList.remove('hidden'); }
+        function hideDetails() { modal.classList.add('hidden'); }
+
+        // --- App Initialization ---
+        function initializeApp() {
+            const savedUser = sessionStorage.getItem('loggedInUser');
+            if (savedUser) {
+                loggedInUser = JSON.parse(savedUser);
+                showDashboard();
+            } else {
+                showLoginView();
+            }
+        }
+
+        // --- Event Listeners ---
+        loginBtn.addEventListener('click', handleLogin);
+        logoutBtn.addEventListener('click', handleLogout);
+        agentSelector.addEventListener('change', updateDisplay);
+        closeModalBtn.addEventListener('click', hideDetails);
+        modal.addEventListener('click', (e) => { if (e.target === modal) hideDetails(); });
+        emailInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') handleLogin(); });
+        document.addEventListener('DOMContentLoaded', initializeApp);
+    </script>
+</body>
+</html>
