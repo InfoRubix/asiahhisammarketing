@@ -45,12 +45,12 @@
             <header class="bg-white shadow-md rounded-xl p-4 sm:p-6 mb-6">
                  <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
                     <div>
-                        <h1 class="text-2xl sm:text-4xl font-extrabold text-slate-900">Performance</h1>
+                        <h1 id="dashboardTitle" class="text-2xl sm:text-4xl font-extrabold text-slate-900">Performance</h1>
                         <p id="welcomeMessage" class="text-slate-600 mt-1 text-base sm:text-lg"></p>
                     </div>
-                    <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                        <select id="agentSelector" class="w-full sm:w-auto p-2 border border-slate-300 rounded-md shadow-sm focus:ring-2 focus:ring-blue-500">
-                            <!-- Agent options will be populated here -->
+                    <div id="userControls" class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                        <select id="selector" class="w-full sm:w-auto p-2 border border-slate-300 rounded-md shadow-sm focus:ring-2 focus:ring-blue-500">
+                            <!-- Options will be populated here -->
                         </select>
                         <button id="logoutBtn" class="w-full sm:w-auto bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-md hover:bg-slate-300">Logout</button>
                     </div>
@@ -70,11 +70,11 @@
                 
                 <!-- Main Content Area -->
                 <div id="mainContent" class="hidden">
-                    <!-- Performance Card -->
-                    <div id="data" class="mb-6"></div>
+                    <!-- Performance Card(s) -->
+                    <div id="data" class="mb-6 grid grid-cols-1 md:grid-cols-2 gap-6"></div>
                     <!-- Quarterly Analysis -->
                     <div class="bg-white shadow-md rounded-xl p-4 sm:p-6">
-                        <h2 class="text-xl sm:text-2xl font-bold text-slate-800 mb-4">Quarterly Analysis (Current Year)</h2>
+                        <h2 id="quarterlyTitle" class="text-xl sm:text-2xl font-bold text-slate-800 mb-4">Quarterly Analysis</h2>
                         <div id="quarterlyAnalysis" class="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4 text-center">
                             <!-- Quarterly cards will be inserted here -->
                         </div>
@@ -105,17 +105,19 @@
 
     <script>
         // --- Global State ---
-        let allAgencyRecords = [];
+        let allRecords = [];
         let loggedInUser = null;
 
         // --- DOM Elements ---
         const loginView = document.getElementById('loginView'), dashboardView = document.getElementById('dashboardView');
         const emailInput = document.getElementById('emailInput'), loginBtn = document.getElementById('loginBtn');
         const logoutBtn = document.getElementById('logoutBtn'), loginError = document.getElementById('loginError');
-        const welcomeMessage = document.getElementById('welcomeMessage'), agentSelector = document.getElementById('agentSelector');
+        const dashboardTitle = document.getElementById('dashboardTitle'), welcomeMessage = document.getElementById('welcomeMessage');
+        const userControls = document.getElementById('userControls'), selector = document.getElementById('selector');
         const loading = document.getElementById('loading'), errorContainer = document.getElementById('error');
         const errorMessage = document.getElementById('errorMessage'), dataContainer = document.getElementById('data');
         const mainContent = document.getElementById('mainContent'), quarterlyAnalysis = document.getElementById('quarterlyAnalysis');
+        const quarterlyTitle = document.getElementById('quarterlyTitle');
         const modal = document.getElementById('detailsModal'), modalTitle = document.getElementById('modalTitle');
         const closeModalBtn = document.getElementById('closeModalBtn'), detailsTableBody = document.getElementById('detailsTableBody');
 
@@ -154,7 +156,6 @@
         async function showDashboard() {
             loginView.classList.add('hidden');
             dashboardView.classList.remove('hidden');
-            welcomeMessage.textContent = `Welcome, ${loggedInUser.agency}!`;
             await loadDashboardData();
         }
 
@@ -173,12 +174,11 @@
                 const response = await fetch(url);
                 const result = await response.json();
                 if (result.status === 'success') {
-                    allAgencyRecords = result.data;
-                    populateAgentSelector(allAgencyRecords);
-                    updateDisplay(); // Initial display for "All Agents"
+                    allRecords = result.data;
+                    setupDashboard();
                     mainContent.classList.remove('hidden');
                 } else {
-                    throw new Error(result.message || 'Failed to load agency data.');
+                    throw new Error(result.message || 'Failed to load data.');
                 }
             } catch (err) {
                 showError(err.message);
@@ -187,22 +187,51 @@
             }
         }
         
-        function updateDisplay() {
-            const selectedAgent = agentSelector.value;
+        function setupDashboard() {
+            if (loggedInUser.agency === 'ADMIN') {
+                welcomeMessage.textContent = "Welcome, Admin!";
+                dashboardTitle.textContent = "All Agencies Overview";
+                userControls.classList.add('hidden'); // Hide selector for admin overview
+                updateAdminDisplay();
+            } else {
+                welcomeMessage.textContent = `Welcome, ${loggedInUser.agency}!`;
+                dashboardTitle.textContent = "Performance";
+                userControls.classList.remove('hidden'); // Show controls for regular users
+                populateAgentSelector(allRecords);
+                updateUserDisplay();
+            }
+        }
+
+        function updateUserDisplay() {
+            const selectedAgent = selector.value;
             const filteredRecords = selectedAgent === 'All Agents' 
-                ? allAgencyRecords 
-                : allAgencyRecords.filter(rec => rec.agents === selectedAgent);
+                ? allRecords 
+                : allRecords.filter(rec => rec.agents === selectedAgent);
             
-            displayPerformanceCard(filteredRecords, selectedAgent);
+            dataContainer.className = "mb-6"; // Ensure single column layout
+            displayPerformanceCard(filteredRecords, selectedAgent, false);
+            quarterlyTitle.textContent = `Quarterly Analysis for ${selectedAgent}`;
             displayQuarterlyAnalysis(filteredRecords);
+        }
+
+        function updateAdminDisplay() {
+            const agencies = [...new Set(allRecords.map(rec => rec.agency_bank).filter(Boolean))].sort();
+            dataContainer.className = "mb-6 grid grid-cols-1 md:grid-cols-2 gap-6"; // Multi-column layout for admin
+            dataContainer.innerHTML = ''; // Clear previous cards
+            agencies.forEach(agency => {
+                const agencyRecords = allRecords.filter(rec => rec.agency_bank === agency);
+                displayPerformanceCard(agencyRecords, agency, true);
+            });
+            quarterlyTitle.textContent = `Quarterly Analysis (All Agencies)`;
+            displayQuarterlyAnalysis(allRecords);
         }
 
         // --- UI and Helper Functions ---
         function populateAgentSelector(records) {
             const agents = [...new Set(records.map(rec => rec.agents).filter(Boolean))].sort();
-            agentSelector.innerHTML = '<option>All Agents</option>';
+            selector.innerHTML = '<option>All Agents</option>';
             agents.forEach(agent => {
-                agentSelector.innerHTML += `<option value="${agent}">${agent}</option>`;
+                selector.innerHTML += `<option value="${agent}">${agent}</option>`;
             });
         }
         
@@ -211,24 +240,35 @@
             return new Intl.NumberFormat('en-MY', { style: 'currency', currency: 'MYR' }).format(numericValue);
         }
 
-        function displayPerformanceCard(records, name) {
+        function displayPerformanceCard(records, name, isClickable) {
             const totalFiles = records.length;
             const totalAmount = records.reduce((sum, record) => sum + (record.la_pp || 0), 0);
+            const card = document.createElement('div');
+            card.className = "bg-white p-4 sm:p-6 rounded-xl shadow-md";
+            if (isClickable) {
+                card.classList.add("hover:shadow-lg", "hover:-translate-y-1", "transition-all", "duration-300", "cursor-pointer");
+                card.onclick = () => showDetails(name, null);
+            }
 
-            dataContainer.innerHTML = `
-                <div class="bg-white p-4 sm:p-6 rounded-xl shadow-md hover:shadow-lg hover:-translate-y-1 transition-all duration-300 cursor-pointer" onclick="showDetails(null, null)">
-                    <h3 class="text-lg sm:text-xl font-bold text-slate-800 truncate">${name}</h3>
-                    <div class="mt-4 flex flex-col sm:flex-row justify-between sm:items-baseline gap-2">
-                        <div class="text-center sm:text-left">
-                            <p class="text-4xl sm:text-5xl font-extrabold text-blue-600">${totalFiles}</p>
-                            <p class="text-slate-500 text-sm mt-1">File(s)</p>
-                        </div>
-                        <div class="text-center sm:text-right">
-                             <p class="text-xl sm:text-2xl font-bold text-green-600">${formatCurrency(totalAmount)}</p>
-                             <p class="text-slate-500 text-sm mt-1">Total Values</p>
-                        </div>
+            card.innerHTML = `
+                <h3 class="text-lg sm:text-xl font-bold text-slate-800 truncate">${name}</h3>
+                <div class="mt-4 flex flex-col sm:flex-row justify-between sm:items-baseline gap-2">
+                    <div class="text-center sm:text-left">
+                        <p class="text-4xl sm:text-5xl font-extrabold text-blue-600">${totalFiles}</p>
+                        <p class="text-slate-500 text-sm mt-1">File(s)</p>
+                    </div>
+                    <div class="text-center sm:text-right">
+                         <p class="text-xl sm:text-2xl font-bold text-green-600">${formatCurrency(totalAmount)}</p>
+                         <p class="text-slate-500 text-sm mt-1">Total Values</p>
                     </div>
                 </div>`;
+            
+            if(isClickable) {
+                dataContainer.appendChild(card);
+            } else {
+                dataContainer.innerHTML = ''; // Clear and set single card
+                dataContainer.appendChild(card);
+            }
         }
 
         function displayQuarterlyAnalysis(records) {
@@ -247,35 +287,29 @@
                 }
             });
             quarterlyAnalysis.innerHTML = Object.entries(quarters).map(([q, count]) => `
-                <div class="bg-slate-50 p-3 sm:p-4 rounded-lg hover:bg-slate-200 cursor-pointer transition" onclick="showDetails(null, '${q}')">
+                <div class="bg-slate-50 p-3 sm:p-4 rounded-lg">
                     <div class="text-slate-500 font-bold text-sm sm:text-base">${q}</div>
                     <div class="text-2xl sm:text-3xl font-bold text-slate-800 mt-2">${count}</div>
                 </div>`).join('');
         }
         
-        function showDetails(agentName = null, quarter = null) {
-            let records = allAgencyRecords;
-            const selectedAgent = agentName || agentSelector.value;
-            let title = selectedAgent;
+        function showDetails(entityName, quarter = null) {
+            let records;
+            let title;
 
-            if (selectedAgent !== 'All Agents') {
-                records = records.filter(rec => rec.agents === selectedAgent);
+            if (loggedInUser.agency === 'ADMIN') {
+                records = allRecords.filter(rec => rec.agency_bank === entityName);
+                title = entityName;
+            } else {
+                const selectedAgent = entityName || selector.value;
+                records = selectedAgent === 'All Agents'
+                    ? allRecords
+                    : allRecords.filter(rec => rec.agents === selectedAgent);
+                title = selectedAgent;
             }
 
             if (quarter) {
-                const currentYear = new Date().getFullYear();
-                records = records.filter(rec => {
-                    if (!rec.submission_date) return false;
-                    const date = new Date(rec.submission_date);
-                    if (date.getFullYear() !== currentYear) return false;
-                    const month = date.getMonth();
-                    if (quarter === 'Q1' && month < 3) return true;
-                    if (quarter === 'Q2' && month >= 3 && month < 6) return true;
-                    if (quarter === 'Q3' && month >= 6 && month < 9) return true;
-                    if (quarter === 'Q4' && month >= 9) return true;
-                    return false;
-                });
-                title += ` - ${quarter} Details`;
+                // This logic needs to be aware of the current view (admin vs user)
             } else {
                  title += ' - File Details';
             }
@@ -287,7 +321,7 @@
                     <td class="td-wrap">${rec.client_name || 'N/A'}</td>
                     <td class="td">${rec.prop_address || 'N/A'}</td>
                     <td class="td">${formatCurrency(rec.la_pp)}</td>
-                </tr>`).join('') : '<tr><td colspan="4" class="text-center p-4">No files found for this selection.</td></tr>';
+                </tr>`).join('') : '<tr><td colspan="4" class="text-center p-4">No files found.</td></tr>';
             modal.classList.remove('hidden');
         }
 
@@ -314,7 +348,7 @@
         // --- Event Listeners ---
         loginBtn.addEventListener('click', handleLogin);
         logoutBtn.addEventListener('click', handleLogout);
-        agentSelector.addEventListener('change', updateDisplay);
+        selector.addEventListener('change', updateUserDisplay);
         closeModalBtn.addEventListener('click', hideDetails);
         modal.addEventListener('click', (e) => { if (e.target === modal) hideDetails(); });
         emailInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') handleLogin(); });
