@@ -70,13 +70,44 @@
                 
                 <!-- Main Content Area -->
                 <div id="mainContent" class="hidden">
-                    <!-- Performance Card(s) -->
-                    <div id="data" class="mb-6 grid grid-cols-1 md:grid-cols-2 gap-6"></div>
+                    <!-- Admin Year-End Summary -->
+                    <div id="adminSummary" class="hidden mb-6"></div>
+                    
                     <!-- Quarterly Analysis -->
-                    <div class="bg-white shadow-md rounded-xl p-4 sm:p-6">
+                    <div id="quarterlyContainer" class="bg-white shadow-md rounded-xl p-4 sm:p-6 mb-6">
                         <h2 id="quarterlyTitle" class="text-xl sm:text-2xl font-bold text-slate-800 mb-4">Quarterly Analysis</h2>
                         <div id="quarterlyAnalysis" class="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4 text-center">
                             <!-- Quarterly cards will be inserted here -->
+                        </div>
+                    </div>
+                    
+                    <!-- Admin Leaderboard -->
+                    <div id="adminLeaderboard" class="hidden bg-white shadow-md rounded-xl p-4 sm:p-6 mb-6">
+                        <h2 class="text-xl sm:text-2xl font-bold text-slate-800 mb-4">Leaderboard (Current Year)</h2>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <!-- Top 3 Overall -->
+                            <div>
+                                <h3 class="font-bold text-slate-600 mb-2 text-center">Top 3 Agencies (Files)</h3>
+                                <ul id="topAgencies" class="space-y-2"></ul>
+                            </div>
+                            <!-- Top Quarterly -->
+                            <div>
+                                <h3 class="font-bold text-slate-600 mb-2 text-center">Top Quarterly Performer</h3>
+                                <ul id="topQuarters" class="space-y-2"></ul>
+                            </div>
+                            <!-- Top Monthly -->
+                            <div>
+                                <h3 class="font-bold text-slate-600 mb-2 text-center">Top Monthly Performer</h3>
+                                <ul id="topMonths" class="space-y-2"></ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Performance Card(s) -->
+                    <div id="agencyListContainer" class="bg-white shadow-md rounded-xl p-4 sm:p-6">
+                         <h2 id="agencyListTitle" class="text-xl sm:text-2xl font-bold text-slate-800 mb-4">Agency Performance</h2>
+                        <div id="data" class="max-h-96 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-6 pr-2">
+                            <!-- Performance cards will be inserted here -->
                         </div>
                     </div>
                 </div>
@@ -116,8 +147,11 @@
         const userControls = document.getElementById('userControls'), selector = document.getElementById('selector');
         const loading = document.getElementById('loading'), errorContainer = document.getElementById('error');
         const errorMessage = document.getElementById('errorMessage'), dataContainer = document.getElementById('data');
-        const mainContent = document.getElementById('mainContent'), quarterlyAnalysis = document.getElementById('quarterlyAnalysis');
-        const quarterlyTitle = document.getElementById('quarterlyTitle');
+        const mainContent = document.getElementById('mainContent'), quarterlyContainer = document.getElementById('quarterlyContainer');
+        const quarterlyAnalysis = document.getElementById('quarterlyAnalysis'), quarterlyTitle = document.getElementById('quarterlyTitle');
+        const adminSummary = document.getElementById('adminSummary'), adminLeaderboard = document.getElementById('adminLeaderboard');
+        const agencyListContainer = document.getElementById('agencyListContainer'), agencyListTitle = document.getElementById('agencyListTitle');
+        const topAgencies = document.getElementById('topAgencies'), topQuarters = document.getElementById('topQuarters'), topMonths = document.getElementById('topMonths');
         const modal = document.getElementById('detailsModal'), modalTitle = document.getElementById('modalTitle');
         const closeModalBtn = document.getElementById('closeModalBtn'), detailsTableBody = document.getElementById('detailsTableBody');
 
@@ -188,15 +222,22 @@
         }
         
         function setupDashboard() {
+            adminSummary.classList.add('hidden');
+            adminLeaderboard.classList.add('hidden');
+            quarterlyContainer.classList.add('hidden');
+            agencyListContainer.classList.add('hidden');
+
             if (loggedInUser.agency === 'ADMIN') {
                 welcomeMessage.textContent = "Welcome, Admin!";
                 dashboardTitle.textContent = "All Agencies Overview";
-                userControls.classList.add('hidden'); // Hide selector for admin overview
+                userControls.classList.remove('hidden');
+                selector.classList.add('hidden');
                 updateAdminDisplay();
             } else {
                 welcomeMessage.textContent = `Welcome, ${loggedInUser.agency}!`;
                 dashboardTitle.textContent = "Performance";
-                userControls.classList.remove('hidden'); // Show controls for regular users
+                userControls.classList.remove('hidden');
+                selector.classList.remove('hidden');
                 populateAgentSelector(allRecords);
                 updateUserDisplay();
             }
@@ -208,22 +249,58 @@
                 ? allRecords 
                 : allRecords.filter(rec => rec.agents === selectedAgent);
             
-            dataContainer.className = "mb-6"; // Ensure single column layout
+            agencyListTitle.textContent = "Performance Breakdown";
+            dataContainer.className = "grid grid-cols-1 gap-6";
             displayPerformanceCard(filteredRecords, selectedAgent, false);
             quarterlyTitle.textContent = `Quarterly Analysis for ${selectedAgent}`;
             displayQuarterlyAnalysis(filteredRecords);
+            quarterlyContainer.classList.remove('hidden');
+            agencyListContainer.classList.remove('hidden');
         }
 
         function updateAdminDisplay() {
+            const currentYear = new Date().getFullYear();
+            const yearlyRecords = allRecords.filter(rec => {
+                if (!rec.submission_date) return false;
+                const date = new Date(rec.submission_date);
+                return date.getFullYear() === currentYear;
+            });
+
+            const totalYearlyFiles = yearlyRecords.length;
+            const totalYearlyAmount = yearlyRecords.reduce((sum, record) => sum + (record.la_pp || 0), 0);
+
+            adminSummary.innerHTML = `
+                <div class="bg-blue-600 text-white p-4 sm:p-6 rounded-xl shadow-lg">
+                    <h3 class="text-lg sm:text-xl font-bold truncate">Total Performance (${currentYear})</h3>
+                    <div class="mt-4 flex flex-col sm:flex-row justify-between sm:items-baseline gap-2">
+                        <div class="text-center sm:text-left">
+                            <p class="text-4xl sm:text-5xl font-extrabold">${totalYearlyFiles}</p>
+                            <p class="opacity-80 text-sm mt-1">Total File(s) This Year</p>
+                        </div>
+                        <div class="text-center sm:text-right">
+                             <p class="text-xl sm:text-2xl font-bold">${formatCurrency(totalYearlyAmount)}</p>
+                             <p class="opacity-80 text-sm mt-1">Total Values This Year</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+            adminSummary.classList.remove('hidden');
+
             const agencies = [...new Set(allRecords.map(rec => rec.agency_bank).filter(Boolean))].sort();
-            dataContainer.className = "mb-6 grid grid-cols-1 md:grid-cols-2 gap-6"; // Multi-column layout for admin
-            dataContainer.innerHTML = ''; // Clear previous cards
+            agencyListTitle.textContent = "Individual Agency Performance";
+            dataContainer.className = "grid grid-cols-1 md:grid-cols-2 gap-6 pr-2";
+            dataContainer.innerHTML = '';
             agencies.forEach(agency => {
                 const agencyRecords = allRecords.filter(rec => rec.agency_bank === agency);
                 displayPerformanceCard(agencyRecords, agency, true);
             });
+            agencyListContainer.classList.remove('hidden');
+
             quarterlyTitle.textContent = `Quarterly Analysis (All Agencies)`;
             displayQuarterlyAnalysis(allRecords);
+            quarterlyContainer.classList.remove('hidden');
+            displayLeaderboard(yearlyRecords);
+            adminLeaderboard.classList.remove('hidden');
         }
 
         // --- UI and Helper Functions ---
@@ -266,7 +343,7 @@
             if(isClickable) {
                 dataContainer.appendChild(card);
             } else {
-                dataContainer.innerHTML = ''; // Clear and set single card
+                dataContainer.innerHTML = '';
                 dataContainer.appendChild(card);
             }
         }
@@ -287,29 +364,92 @@
                 }
             });
             quarterlyAnalysis.innerHTML = Object.entries(quarters).map(([q, count]) => `
-                <div class="bg-slate-50 p-3 sm:p-4 rounded-lg">
+                <div class="bg-slate-50 p-3 sm:p-4 rounded-lg hover:bg-slate-200 cursor-pointer transition" onclick="showDetails(null, '${q}')">
                     <div class="text-slate-500 font-bold text-sm sm:text-base">${q}</div>
                     <div class="text-2xl sm:text-3xl font-bold text-slate-800 mt-2">${count}</div>
                 </div>`).join('');
         }
+
+        function displayLeaderboard(records) {
+            // Top 3 Agencies Overall
+            const agencyCounts = records.reduce((acc, rec) => {
+                acc[rec.agency_bank] = (acc[rec.agency_bank] || 0) + 1;
+                return acc;
+            }, {});
+            const sortedAgencies = Object.entries(agencyCounts).sort((a, b) => b[1] - a[1]).slice(0, 3);
+            topAgencies.innerHTML = sortedAgencies.map(([name, count]) => `
+                <li class="bg-slate-50 p-3 rounded-md flex justify-between items-center">
+                    <span class="font-semibold text-slate-700">${name}</span>
+                    <span class="font-bold text-blue-600">${count} files</span>
+                </li>`).join('');
+
+            // Top Quarterly Performers
+            const quarterCounts = { Q1: {}, Q2: {}, Q3: {}, Q4: {} };
+            records.forEach(rec => {
+                if (rec.submission_date) {
+                    const month = new Date(rec.submission_date).getMonth();
+                    let q;
+                    if (month < 3) q = 'Q1';
+                    else if (month < 6) q = 'Q2';
+                    else if (month < 9) q = 'Q3';
+                    else q = 'Q4';
+                    quarterCounts[q][rec.agency_bank] = (quarterCounts[q][rec.agency_bank] || 0) + 1;
+                }
+            });
+            topQuarters.innerHTML = Object.entries(quarterCounts).map(([q, agencies]) => {
+                const top = Object.entries(agencies).sort((a, b) => b[1] - a[1])[0];
+                return top ? `<li class="bg-slate-50 p-3 rounded-md flex justify-between items-center">
+                                <span class="font-semibold text-slate-700">${q}: ${top[0]}</span>
+                                <span class="font-bold text-blue-600">${top[1]} files</span>
+                              </li>` : '';
+            }).join('');
+
+            // Top Monthly Performers
+            const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            const monthCounts = {};
+            records.forEach(rec => {
+                if (rec.submission_date) {
+                    const monthIndex = new Date(rec.submission_date).getMonth();
+                    if (!monthCounts[monthIndex]) monthCounts[monthIndex] = {};
+                    monthCounts[monthIndex][rec.agency_bank] = (monthCounts[monthIndex][rec.agency_bank] || 0) + 1;
+                }
+            });
+            topMonths.innerHTML = Object.entries(monthCounts).map(([monthIndex, agencies]) => {
+                 const top = Object.entries(agencies).sort((a, b) => b[1] - a[1])[0];
+                 return top ? `<li class="bg-slate-50 p-3 rounded-md flex justify-between items-center">
+                                <span class="font-semibold text-slate-700">${monthNames[monthIndex]}: ${top[0]}</span>
+                                <span class="font-bold text-blue-600">${top[1]} files</span>
+                               </li>` : '';
+            }).join('');
+        }
         
-        function showDetails(entityName, quarter = null) {
+        function showDetails(entityName, quarter) {
             let records;
             let title;
 
             if (loggedInUser.agency === 'ADMIN') {
-                records = allRecords.filter(rec => rec.agency_bank === entityName);
-                title = entityName;
+                records = entityName ? allRecords.filter(rec => rec.agency_bank === entityName) : allRecords;
+                title = entityName || "All Agencies";
             } else {
-                const selectedAgent = entityName || selector.value;
-                records = selectedAgent === 'All Agents'
-                    ? allRecords
-                    : allRecords.filter(rec => rec.agents === selectedAgent);
+                const selectedAgent = selector.value;
+                records = selectedAgent === 'All Agents' ? allRecords : allRecords.filter(rec => rec.agents === selectedAgent);
                 title = selectedAgent;
             }
 
             if (quarter) {
-                // This logic needs to be aware of the current view (admin vs user)
+                const currentYear = new Date().getFullYear();
+                records = records.filter(rec => {
+                    if (!rec.submission_date) return false;
+                    const date = new Date(rec.submission_date);
+                    if (date.getFullYear() !== currentYear) return false;
+                    const month = date.getMonth();
+                    if (quarter === 'Q1' && month < 3) return true;
+                    if (quarter === 'Q2' && month >= 3 && month < 6) return true;
+                    if (quarter === 'Q3' && month >= 6 && month < 9) return true;
+                    if (quarter === 'Q4' && month >= 9) return true;
+                    return false;
+                });
+                title += ` - ${quarter} Details`;
             } else {
                  title += ' - File Details';
             }
@@ -321,7 +461,7 @@
                     <td class="td-wrap">${rec.client_name || 'N/A'}</td>
                     <td class="td">${rec.prop_address || 'N/A'}</td>
                     <td class="td">${formatCurrency(rec.la_pp)}</td>
-                </tr>`).join('') : '<tr><td colspan="4" class="text-center p-4">No files found.</td></tr>';
+                </tr>`).join('') : '<tr><td colspan="4" class="text-center p-4">No files found for this selection.</td></tr>';
             modal.classList.remove('hidden');
         }
 
@@ -348,7 +488,13 @@
         // --- Event Listeners ---
         loginBtn.addEventListener('click', handleLogin);
         logoutBtn.addEventListener('click', handleLogout);
-        selector.addEventListener('change', updateUserDisplay);
+        selector.addEventListener('change', () => {
+             if (loggedInUser.agency === 'ADMIN') {
+                 updateAdminDisplay();
+             } else {
+                 updateUserDisplay();
+             }
+        });
         closeModalBtn.addEventListener('click', hideDetails);
         modal.addEventListener('click', (e) => { if (e.target === modal) hideDetails(); });
         emailInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') handleLogin(); });
