@@ -120,6 +120,12 @@
                         <div id="quarterlyAgentChallenge" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"></div>
                     </div>
 
+                    <!-- Admin Travel Challenge -->
+                    <div id="adminTravelChallenge" class="hidden bg-white shadow-md rounded-xl p-4 sm:p-6 mb-6">
+                        <h2 class="text-xl sm:text-2xl font-bold text-slate-800 mb-4">Travel Challenge (Stamping Charges)</h2>
+                        <div id="travelChallenge" class="max-h-80 overflow-y-auto space-y-3 challenge-scroll pr-2"></div>
+                    </div>
+
                     <!-- Performance Card(s) -->
                     <div id="agencyListContainer" class="bg-white shadow-md rounded-xl p-4 sm:p-6">
                          <h2 id="agencyListTitle" class="text-xl sm:text-2xl font-bold text-slate-800 mb-4">Agency Performance</h2>
@@ -137,6 +143,10 @@
                         <div class="bg-white shadow-md rounded-xl p-4 sm:p-6">
                             <h2 class="text-xl sm:text-2xl font-bold text-slate-800 mb-4">Your Quarterly Challenge (Total Files)</h2>
                             <div id="userQuarterlyChallenge" class="grid grid-cols-1 sm:grid-cols-2 gap-4"></div>
+                        </div>
+                         <div class="bg-white shadow-md rounded-xl p-4 sm:p-6">
+                            <h2 class="text-xl sm:text-2xl font-bold text-slate-800 mb-4">Your Travel Challenge (Stamping Charges)</h2>
+                            <div id="userTravelChallenge"></div>
                         </div>
                     </div>
                 </div>
@@ -166,6 +176,7 @@
     <script>
         // --- Global State ---
         let allRecords = [];
+        let travelRecords = [];
         let loggedInUser = null;
 
         // --- DOM Elements ---
@@ -182,13 +193,14 @@
         const agencyListContainer = document.getElementById('agencyListContainer'), agencyListTitle = document.getElementById('agencyListTitle');
         const adminChallenge = document.getElementById('adminChallenge'), agentChallenge = document.getElementById('agentChallenge');
         const adminQuarterlyChallenge = document.getElementById('adminQuarterlyChallenge'), quarterlyAgentChallenge = document.getElementById('quarterlyAgentChallenge');
-        const userChallengeContainer = document.getElementById('userChallengeContainer'), userAnnualChallenge = document.getElementById('userAnnualChallenge'), userQuarterlyChallenge = document.getElementById('userQuarterlyChallenge');
+        const adminTravelChallenge = document.getElementById('adminTravelChallenge'), travelChallenge = document.getElementById('travelChallenge');
+        const userChallengeContainer = document.getElementById('userChallengeContainer'), userAnnualChallenge = document.getElementById('userAnnualChallenge'), userQuarterlyChallenge = document.getElementById('userQuarterlyChallenge'), userTravelChallenge = document.getElementById('userTravelChallenge');
         const topAgencies = document.getElementById('topAgencies'), topQuarters = document.getElementById('topQuarters'), topMonths = document.getElementById('topMonths');
         const modal = document.getElementById('detailsModal'), modalTitle = document.getElementById('modalTitle');
         const closeModalBtn = document.getElementById('closeModalBtn'), detailsTableBody = document.getElementById('detailsTableBody');
 
         // --- URL for the deployed Google Apps Script ---
-        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxrcOGVn0qNuLM7PpVUObnBsNZ9uSTyecflsIIsORpfr0SU1HxKvBo_GTpoB7jZ0dWHTg/exec';
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxgyQ7yfbckJQHHZefx-K8lXss-LaowhswaT9cis6YVokKouJW_QWZJqV9hmW-nZ80X/exec';
 
         // --- Core Functions ---
         async function handleLogin() {
@@ -207,7 +219,7 @@
                     throw new Error(result.message || "Login failed.");
                 }
             } catch (err) {
-                showLoginError(err.message);
+                showLoginError("Failed to fetch. Please check the App Script URL and deployment settings.");
             } finally {
                 setLoginButtonState(false);
             }
@@ -240,7 +252,8 @@
                 const response = await fetch(url);
                 const result = await response.json();
                 if (result.status === 'success') {
-                    allRecords = result.data;
+                    allRecords = Array.isArray(result.data.performanceData) ? result.data.performanceData : [];
+                    travelRecords = Array.isArray(result.data.travelData) ? result.data.travelData : [];
                     setupDashboard();
                     mainContent.classList.remove('hidden');
                 } else {
@@ -255,7 +268,7 @@
         
         function setupDashboard() {
             // Hide all sections by default
-            [adminSummary, adminLeaderboard, quarterlyContainer, agencyListContainer, adminChallenge, adminQuarterlyChallenge, userChallengeContainer].forEach(el => el.classList.add('hidden'));
+            [adminSummary, adminLeaderboard, quarterlyContainer, agencyListContainer, adminChallenge, adminQuarterlyChallenge, adminTravelChallenge, userChallengeContainer].forEach(el => el.classList.add('hidden'));
 
             if (loggedInUser.agency === 'ADMIN') {
                 welcomeMessage.textContent = "Welcome, Admin!";
@@ -279,6 +292,10 @@
                 ? allRecords 
                 : allRecords.filter(rec => rec.agents === selectedAgent);
             
+            const filteredTravelRecords = selectedAgent === 'All Agents'
+                ? travelRecords
+                : travelRecords.filter(rec => rec.agents === selectedAgent);
+
             agencyListTitle.textContent = "Performance Breakdown";
             dataContainer.className = "grid grid-cols-1 gap-6";
             displayPerformanceCard(filteredRecords, selectedAgent, false);
@@ -288,6 +305,7 @@
             // Show user-specific sections
             displayUserAnnualChallenge(filteredRecords);
             displayUserQuarterlyChallenge(filteredRecords);
+            displayUserTravelChallenge(filteredTravelRecords);
             userChallengeContainer.classList.remove('hidden');
             quarterlyContainer.classList.remove('hidden');
             agencyListContainer.classList.remove('hidden');
@@ -330,9 +348,10 @@
             displayLeaderboard(yearlyRecords);
             displayChallengeTracker(yearlyRecords);
             displayQuarterlyChallenge(yearlyRecords);
+            displayAdminTravelChallenge(travelRecords);
             
             // Show all admin sections
-            [adminSummary, quarterlyContainer, adminLeaderboard, adminChallenge, adminQuarterlyChallenge, agencyListContainer].forEach(el => el.classList.remove('hidden'));
+            [adminSummary, quarterlyContainer, adminLeaderboard, adminChallenge, adminQuarterlyChallenge, adminTravelChallenge, agencyListContainer].forEach(el => el.classList.remove('hidden'));
         }
 
         // --- UI and Helper Functions ---
@@ -431,9 +450,9 @@
             topQuarters.innerHTML = Object.entries(quarterCounts).map(([q, agencies]) => {
                 const top = Object.entries(agencies).sort((a, b) => b[1] - a[1])[0];
                 return top ? `<li class="bg-slate-50 p-3 rounded-md flex justify-between items-center">
-                                <span class="font-semibold text-slate-700">${q}: ${top[0]}</span>
-                                <span class="font-bold text-blue-600">${top[1]} files</span>
-                              </li>` : '';
+                                        <span class="font-semibold text-slate-700">${q}: ${top[0]}</span>
+                                        <span class="font-bold text-blue-600">${top[1]} files</span>
+                                      </li>` : '';
             }).join('');
 
             // Top Monthly Performers
@@ -449,9 +468,9 @@
             topMonths.innerHTML = Object.entries(monthCounts).map(([monthIndex, agencies]) => {
                  const top = Object.entries(agencies).sort((a, b) => b[1] - a[1])[0];
                  return top ? `<li class="bg-slate-50 p-3 rounded-md flex justify-between items-center">
-                                <span class="font-semibold text-slate-700">${monthNames[monthIndex]}: ${top[0]}</span>
-                                <span class="font-bold text-blue-600">${top[1]} files</span>
-                               </li>` : '';
+                                        <span class="font-semibold text-slate-700">${monthNames[monthIndex]}: ${top[0]}</span>
+                                        <span class="font-bold text-blue-600">${top[1]} files</span>
+                                       </li>` : '';
             }).join('');
         }
 
@@ -571,6 +590,33 @@
                 return content;
             }).join('');
         }
+
+        function displayAdminTravelChallenge(records) {
+            const agentCharges = records.reduce((acc, rec) => {
+                if (rec.agents) {
+                    if (!acc[rec.agents]) {
+                        acc[rec.agents] = { totalCharge: 0, agency: rec.agency_bank };
+                    }
+                    acc[rec.agents].totalCharge += (rec.charge || 0);
+                }
+                return acc;
+            }, {});
+
+            const sortedAgents = Object.entries(agentCharges).sort((a, b) => b[1].totalCharge - a[1].totalCharge);
+
+            if (sortedAgents.length > 0) {
+                travelChallenge.innerHTML = sortedAgents.map(([agentName, data]) => `
+                    <div class="bg-slate-50 p-3 rounded-md">
+                        <div class="flex justify-between items-center">
+                            <p class="font-semibold text-slate-800">${agentName} <span class="text-xs text-slate-400">(${data.agency})</span></p>
+                            <p class="font-bold text-purple-600">${formatCurrency(data.totalCharge)}</p>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                travelChallenge.innerHTML = `<p class="text-center text-slate-500 p-4">No stamping charges recorded yet.</p>`;
+            }
+        }
         
         function showDetails(entityName, quarter) {
             let records;
@@ -649,7 +695,7 @@
                 { value: 2000000, reward: 2000 },
                 { value: 2500000, reward: 2500 },
             ];
-            const bestFile = records.reduce((max, file) => (file.la_pp > max.la_pp ? file : max), { la_pp: 0 });
+            const bestFile = records.reduce((max, file) => ((file.la_pp || 0) > (max.la_pp || 0) ? file : max), { la_pp: 0 });
 
             let highestTier = null;
             let nextTier = tiers[0];
@@ -747,6 +793,27 @@
                         </div>`;
                 }
             }).join('');
+        }
+
+        function displayUserTravelChallenge(records) {
+            const travelGoal = 5000; // Let's set a goal of RM 5000
+            const totalCharge = records.reduce((sum, rec) => sum + (rec.charge || 0), 0);
+            const progress = (totalCharge / travelGoal) * 100;
+
+            userTravelChallenge.innerHTML = `
+                <div class="bg-slate-50 p-3 rounded-md">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="font-semibold text-slate-700 text-sm">Your Progress</span>
+                        <span class="font-bold text-purple-600 text-sm">${totalCharge >= travelGoal ? 'Goal Reached!' : 'Keep Going!'}</span>
+                    </div>
+                    <div class="w-full bg-slate-200 rounded-full h-2.5">
+                        <div class="bg-purple-600 h-2.5 rounded-full" style="width: ${progress > 100 ? 100 : progress}%"></div>
+                    </div>
+                    <div class="text-xs text-slate-500 mt-1 text-right">
+                        Total Charges: ${formatCurrency(totalCharge)} / ${formatCurrency(travelGoal)}
+                    </div>
+                </div>
+            `;
         }
 
         // --- Event Listeners ---
