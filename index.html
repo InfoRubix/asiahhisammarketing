@@ -18,6 +18,11 @@
         .th { padding: 0.75rem 1rem; text-align: left; font-size: 0.75rem; font-weight: 500; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
         .td { padding: 1rem 1rem; white-space: nowrap; font-size: 0.875rem; color: #334155; }
         .td-wrap { padding: 1rem 1rem; white-space: pre-wrap; font-size: 0.875rem; color: #475569; }
+        /* Custom scrollbar for challenge tracker */
+        .challenge-scroll::-webkit-scrollbar { width: 8px; }
+        .challenge-scroll::-webkit-scrollbar-track { background: #f1f5f9; }
+        .challenge-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .challenge-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
 </head>
 <body class="bg-slate-100 text-slate-800 flex items-center justify-center min-h-screen">
@@ -103,11 +108,35 @@
                         </div>
                     </div>
 
+                    <!-- Admin Annual Agent Challenge Tracker -->
+                    <div id="adminChallenge" class="hidden bg-white shadow-md rounded-xl p-4 sm:p-6 mb-6">
+                        <h2 class="text-xl sm:text-2xl font-bold text-slate-800 mb-4">Annual Agent Challenge (Per File)</h2>
+                        <div id="agentChallenge" class="max-h-80 overflow-y-auto space-y-3 challenge-scroll pr-2"></div>
+                    </div>
+                    
+                    <!-- Admin Quarterly Agent Challenge Tracker -->
+                    <div id="adminQuarterlyChallenge" class="hidden bg-white shadow-md rounded-xl p-4 sm:p-6 mb-6">
+                        <h2 class="text-xl sm:text-2xl font-bold text-slate-800 mb-4">Quarterly Agent Challenge (Total Files)</h2>
+                        <div id="quarterlyAgentChallenge" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"></div>
+                    </div>
+
                     <!-- Performance Card(s) -->
                     <div id="agencyListContainer" class="bg-white shadow-md rounded-xl p-4 sm:p-6">
                          <h2 id="agencyListTitle" class="text-xl sm:text-2xl font-bold text-slate-800 mb-4">Agency Performance</h2>
                         <div id="data" class="max-h-96 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-6 pr-2">
                             <!-- Performance cards will be inserted here -->
+                        </div>
+                    </div>
+
+                    <!-- User Challenges -->
+                     <div id="userChallengeContainer" class="hidden mt-6 space-y-6">
+                        <div class="bg-white shadow-md rounded-xl p-4 sm:p-6">
+                            <h2 class="text-xl sm:text-2xl font-bold text-slate-800 mb-4">Your Annual Challenge (Best File)</h2>
+                            <div id="userAnnualChallenge"></div>
+                        </div>
+                        <div class="bg-white shadow-md rounded-xl p-4 sm:p-6">
+                            <h2 class="text-xl sm:text-2xl font-bold text-slate-800 mb-4">Your Quarterly Challenge (Total Files)</h2>
+                            <div id="userQuarterlyChallenge" class="grid grid-cols-1 sm:grid-cols-2 gap-4"></div>
                         </div>
                     </div>
                 </div>
@@ -151,6 +180,9 @@
         const quarterlyAnalysis = document.getElementById('quarterlyAnalysis'), quarterlyTitle = document.getElementById('quarterlyTitle');
         const adminSummary = document.getElementById('adminSummary'), adminLeaderboard = document.getElementById('adminLeaderboard');
         const agencyListContainer = document.getElementById('agencyListContainer'), agencyListTitle = document.getElementById('agencyListTitle');
+        const adminChallenge = document.getElementById('adminChallenge'), agentChallenge = document.getElementById('agentChallenge');
+        const adminQuarterlyChallenge = document.getElementById('adminQuarterlyChallenge'), quarterlyAgentChallenge = document.getElementById('quarterlyAgentChallenge');
+        const userChallengeContainer = document.getElementById('userChallengeContainer'), userAnnualChallenge = document.getElementById('userAnnualChallenge'), userQuarterlyChallenge = document.getElementById('userQuarterlyChallenge');
         const topAgencies = document.getElementById('topAgencies'), topQuarters = document.getElementById('topQuarters'), topMonths = document.getElementById('topMonths');
         const modal = document.getElementById('detailsModal'), modalTitle = document.getElementById('modalTitle');
         const closeModalBtn = document.getElementById('closeModalBtn'), detailsTableBody = document.getElementById('detailsTableBody');
@@ -222,10 +254,8 @@
         }
         
         function setupDashboard() {
-            adminSummary.classList.add('hidden');
-            adminLeaderboard.classList.add('hidden');
-            quarterlyContainer.classList.add('hidden');
-            agencyListContainer.classList.add('hidden');
+            // Hide all sections by default
+            [adminSummary, adminLeaderboard, quarterlyContainer, agencyListContainer, adminChallenge, adminQuarterlyChallenge, userChallengeContainer].forEach(el => el.classList.add('hidden'));
 
             if (loggedInUser.agency === 'ADMIN') {
                 welcomeMessage.textContent = "Welcome, Admin!";
@@ -254,17 +284,18 @@
             displayPerformanceCard(filteredRecords, selectedAgent, false);
             quarterlyTitle.textContent = `Quarterly Analysis for ${selectedAgent}`;
             displayQuarterlyAnalysis(filteredRecords);
+            
+            // Show user-specific sections
+            displayUserAnnualChallenge(filteredRecords);
+            displayUserQuarterlyChallenge(filteredRecords);
+            userChallengeContainer.classList.remove('hidden');
             quarterlyContainer.classList.remove('hidden');
             agencyListContainer.classList.remove('hidden');
         }
 
         function updateAdminDisplay() {
             const currentYear = new Date().getFullYear();
-            const yearlyRecords = allRecords.filter(rec => {
-                if (!rec.submission_date) return false;
-                const date = new Date(rec.submission_date);
-                return date.getFullYear() === currentYear;
-            });
+            const yearlyRecords = allRecords.filter(rec => rec.submission_date && new Date(rec.submission_date).getFullYear() === currentYear);
 
             const totalYearlyFiles = yearlyRecords.length;
             const totalYearlyAmount = yearlyRecords.reduce((sum, record) => sum + (record.la_pp || 0), 0);
@@ -284,8 +315,7 @@
                     </div>
                 </div>
             `;
-            adminSummary.classList.remove('hidden');
-
+            
             const agencies = [...new Set(allRecords.map(rec => rec.agency_bank).filter(Boolean))].sort();
             agencyListTitle.textContent = "Individual Agency Performance";
             dataContainer.className = "grid grid-cols-1 md:grid-cols-2 gap-6 pr-2";
@@ -294,13 +324,15 @@
                 const agencyRecords = allRecords.filter(rec => rec.agency_bank === agency);
                 displayPerformanceCard(agencyRecords, agency, true);
             });
-            agencyListContainer.classList.remove('hidden');
-
+            
             quarterlyTitle.textContent = `Quarterly Analysis (All Agencies)`;
             displayQuarterlyAnalysis(allRecords);
-            quarterlyContainer.classList.remove('hidden');
             displayLeaderboard(yearlyRecords);
-            adminLeaderboard.classList.remove('hidden');
+            displayChallengeTracker(yearlyRecords);
+            displayQuarterlyChallenge(yearlyRecords);
+            
+            // Show all admin sections
+            [adminSummary, quarterlyContainer, adminLeaderboard, adminChallenge, adminQuarterlyChallenge, agencyListContainer].forEach(el => el.classList.remove('hidden'));
         }
 
         // --- UI and Helper Functions ---
@@ -422,6 +454,123 @@
                                </li>` : '';
             }).join('');
         }
+
+        function displayChallengeTracker(records) {
+            const tiers = [
+                { value: 1000000, reward: 1000 },
+                { value: 1500000, reward: 1500 },
+                { value: 2000000, reward: 2000 },
+                { value: 2500000, reward: 2500 },
+            ];
+
+            const getReward = (value) => {
+                let reward = 0;
+                for (const tier of tiers) {
+                    if (value >= tier.value) {
+                        reward = tier.reward;
+                    } else {
+                        break;
+                    }
+                }
+                return reward;
+            };
+
+            const renderWinner = (agentName, agency, record) => {
+                const reward = getReward(record.la_pp);
+                return `
+                    <div class="bg-slate-50 p-3 rounded-md">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <p class="font-semibold text-slate-800">${agentName} <span class="text-xs text-slate-400">(${agency})</span></p>
+                                <p class="text-xs text-slate-500 mt-1">File: ${record.ref_num} (${record.client_name})</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="font-bold text-green-600">${formatCurrency(reward)}</p>
+                                <p class="text-xs text-slate-500 mt-1">Value: ${formatCurrency(record.la_pp)}</p>
+                            </div>
+                        </div>
+                    </div>`;
+            };
+
+            const agentData = records.reduce((acc, rec) => {
+                if (rec.agents && rec.la_pp >= tiers[0].value) {
+                    if (!acc[rec.agents] || (rec.la_pp || 0) > (acc[rec.agents].la_pp || 0)) {
+                        acc[rec.agents] = rec;
+                    }
+                }
+                return acc;
+            }, {});
+
+            const winners = Object.values(agentData);
+            if (winners.length > 0) {
+                agentChallenge.innerHTML = winners
+                    .sort((a, b) => (b.la_pp || 0) - (a.la_pp || 0))
+                    .map(record => renderWinner(record.agents, record.agency_bank, record))
+                    .join('');
+            } else {
+                agentChallenge.innerHTML = `<p class="text-center text-slate-500 p-4">No agents have qualified for the challenge yet.</p>`;
+            }
+        }
+
+        function displayQuarterlyChallenge(records) {
+            const tiers = [
+                { files: 5, reward: 1500 },
+                { files: 10, reward: 3000 },
+                { files: 15, reward: 4500 },
+                { files: 20, reward: 6000 },
+            ];
+            
+            const getReward = (fileCount) => {
+                let reward = 0;
+                for (const tier of tiers) {
+                    if (fileCount >= tier.files) {
+                        reward = tier.reward;
+                    } else {
+                        break;
+                    }
+                }
+                return reward;
+            };
+
+            const quarterData = { Q1: {}, Q2: {}, Q3: {}, Q4: {} };
+            records.forEach(rec => {
+                if (rec.submission_date && rec.agents) {
+                    const month = new Date(rec.submission_date).getMonth();
+                    let q;
+                    if (month < 3) q = 'Q1';
+                    else if (month < 6) q = 'Q2';
+                    else if (month < 9) q = 'Q3';
+                    else q = 'Q4';
+
+                    if (!quarterData[q][rec.agents]) {
+                        quarterData[q][rec.agents] = { count: 0, agency: rec.agency_bank };
+                    }
+                    quarterData[q][rec.agents].count++;
+                }
+            });
+
+            quarterlyAgentChallenge.innerHTML = Object.entries(quarterData).map(([q, agents]) => {
+                const winners = Object.entries(agents).filter(([name, data]) => data.count >= tiers[0].files);
+                let content = `<div class="space-y-3"><h3 class="font-bold text-slate-600 text-center">${q} Winners</h3>`;
+                if (winners.length > 0) {
+                    content += winners.sort((a,b) => b[1].count - a[1].count).map(([name, data]) => {
+                        const reward = getReward(data.count);
+                        return `
+                        <div class="bg-slate-50 p-3 rounded-md">
+                            <div class="flex justify-between items-center">
+                                <p class="font-semibold text-slate-800">${name} <span class="text-xs text-slate-400">(${data.agency})</span></p>
+                                <p class="font-bold text-green-600">${formatCurrency(reward)}</p>
+                            </div>
+                            <p class="text-xs text-slate-500 mt-1">${data.count} files</p>
+                        </div>`;
+                    }).join('');
+                } else {
+                    content += `<p class="text-center text-slate-400 text-sm p-3">No winners for this quarter.</p>`;
+                }
+                content += `</div>`;
+                return content;
+            }).join('');
+        }
         
         function showDetails(entityName, quarter) {
             let records;
@@ -483,6 +632,121 @@
             } else {
                 showLoginView();
             }
+        }
+        
+        function getQuarter(date) {
+            const month = date.getMonth();
+            if (month < 3) return 'Q1';
+            if (month < 6) return 'Q2';
+            if (month < 9) return 'Q3';
+            return 'Q4';
+        }
+
+        function displayUserAnnualChallenge(records) {
+             const tiers = [
+                { value: 1000000, reward: 1000 },
+                { value: 1500000, reward: 1500 },
+                { value: 2000000, reward: 2000 },
+                { value: 2500000, reward: 2500 },
+            ];
+            const bestFile = records.reduce((max, file) => (file.la_pp > max.la_pp ? file : max), { la_pp: 0 });
+
+            let highestTier = null;
+            let nextTier = tiers[0];
+            for (const tier of tiers) {
+                if (bestFile.la_pp >= tier.value) {
+                    highestTier = tier;
+                } else {
+                    nextTier = tier;
+                    break;
+                }
+            }
+            if (bestFile.la_pp >= tiers[tiers.length - 1].value) nextTier = null;
+            
+            const progress = nextTier ? (bestFile.la_pp / nextTier.value) * 100 : 100;
+
+            userAnnualChallenge.innerHTML = `
+                <div class="bg-slate-50 p-3 rounded-md">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="font-semibold text-slate-700 text-sm">Your Progress</span>
+                        <span class="font-bold text-green-600 text-sm">${highestTier ? `Reward: ${formatCurrency(highestTier.reward)}` : 'No Reward Yet'}</span>
+                    </div>
+                    <div class="w-full bg-slate-200 rounded-full h-2.5">
+                        <div class="bg-blue-600 h-2.5 rounded-full" style="width: ${progress}%"></div>
+                    </div>
+                    <div class="text-xs text-slate-500 mt-1 text-right">
+                        ${nextTier ? `Current Best: ${formatCurrency(bestFile.la_pp)} / ${formatCurrency(nextTier.value)}` : 'Max Goal Reached!'}
+                    </div>
+                </div>`;
+        }
+        
+        function displayUserQuarterlyChallenge(records) {
+            const tiers = [
+                { files: 5, reward: 1500 },
+                { files: 10, reward: 3000 },
+                { files: 15, reward: 4500 },
+                { files: 20, reward: 6000 },
+            ];
+            const currentYear = new Date().getFullYear();
+            const quarterIndexes = { Q1: 0, Q2: 1, Q3: 2, Q4: 3 };
+            const currentQuarter = getQuarter(new Date());
+            const currentQuarterIndex = quarterIndexes[currentQuarter];
+            
+            const quarterFileCounts = { Q1: 0, Q2: 0, Q3: 0, Q4: 0 };
+            records.forEach(rec => {
+                if (rec.submission_date) {
+                    const date = new Date(rec.submission_date);
+                    if (date.getFullYear() === currentYear) {
+                        const q = getQuarter(date);
+                        quarterFileCounts[q]++;
+                    }
+                }
+            });
+
+            userQuarterlyChallenge.innerHTML = Object.entries(quarterFileCounts).map(([q, fileCount]) => {
+                const qIndex = quarterIndexes[q];
+                
+                if (qIndex < currentQuarterIndex) {
+                    // Past Quarter
+                    const reward = tiers.filter(t => fileCount >= t.files).pop()?.reward || 0;
+                     return `
+                        <div class="bg-slate-50 p-3 rounded-md">
+                            <div class="flex justify-between items-center">
+                                <span class="font-semibold text-slate-700 text-sm">${q} (Completed)</span>
+                                <span class="font-bold ${reward > 0 ? 'text-green-600' : 'text-slate-500'} text-sm">${reward > 0 ? `Reward: ${formatCurrency(reward)}` : 'No Reward'}</span>
+                            </div>
+                            <p class="text-xs text-slate-500 mt-1">${fileCount} files submitted</p>
+                        </div>`;
+                } else if (qIndex === currentQuarterIndex) {
+                    // Current Quarter
+                    let highestTier = null;
+                    let nextTier = tiers[0];
+                    for (const tier of tiers) {
+                        if (fileCount >= tier.files) { highestTier = tier; } 
+                        else { nextTier = tier; break; }
+                    }
+                    if (fileCount >= tiers[tiers.length - 1].files) nextTier = null;
+                    const progress = nextTier ? (fileCount / nextTier.files) * 100 : 100;
+                    return `
+                        <div class="bg-slate-50 p-3 rounded-md">
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="font-semibold text-slate-700 text-sm">Your Progress (${q})</span>
+                                <span class="font-bold text-green-600 text-sm">${highestTier ? `Reward: ${formatCurrency(highestTier.reward)}` : 'No Reward Yet'}</span>
+                            </div>
+                            <div class="w-full bg-slate-200 rounded-full h-2.5"><div class="bg-blue-600 h-2.5 rounded-full" style="width: ${progress}%"></div></div>
+                            <div class="text-xs text-slate-500 mt-1 text-right">${nextTier ? `Current: ${fileCount} files / ${nextTier.files} files` : 'Max Goal Reached!'}</div>
+                        </div>`;
+                } else {
+                    // Future Quarter
+                    return `
+                        <div class="bg-slate-50 p-3 rounded-md opacity-60">
+                             <div class="flex justify-between items-center">
+                                <span class="font-semibold text-slate-700 text-sm">${q} (Upcoming)</span>
+                            </div>
+                            <p class="text-xs text-slate-500 mt-1">Challenge has not started yet.</p>
+                        </div>`;
+                }
+            }).join('');
         }
 
         // --- Event Listeners ---
