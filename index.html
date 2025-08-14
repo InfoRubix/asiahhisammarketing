@@ -796,7 +796,7 @@
         }
 
         function displayUserTravelChallenge(records) {
-            const travelGoal = 5000; // Let's set a goal of RM 5000
+            const travelGoal = 25000; // The goal is now RM 25,000
             const totalCharge = records.reduce((sum, rec) => sum + (rec.charge || 0), 0);
             const progress = (totalCharge / travelGoal) * 100;
 
