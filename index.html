@@ -148,6 +148,13 @@
                             <h2 class="text-xl sm:text-2xl font-bold text-slate-800 mb-4">Your Travel Challenge (Stamping Charges)</h2>
                             <div id="userTravelChallenge"></div>
                         </div>
+                        <!-- Chester GTG Cash Challenge -->
+                        <div id="userCashChallengeContainer" class="hidden bg-white shadow-md rounded-xl p-4 sm:p-6">
+                            <h2 class="text-xl sm:text-2xl font-bold text-slate-800 mb-4">Your Cash Challenge</h2>
+                            <div id="userCashChallenge" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <!-- Cash challenge periods will be inserted here -->
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -195,6 +202,7 @@
         const adminQuarterlyChallenge = document.getElementById('adminQuarterlyChallenge'), quarterlyAgentChallenge = document.getElementById('quarterlyAgentChallenge');
         const adminTravelChallenge = document.getElementById('adminTravelChallenge'), travelChallenge = document.getElementById('travelChallenge');
         const userChallengeContainer = document.getElementById('userChallengeContainer'), userAnnualChallenge = document.getElementById('userAnnualChallenge'), userQuarterlyChallenge = document.getElementById('userQuarterlyChallenge'), userTravelChallenge = document.getElementById('userTravelChallenge');
+        const userCashChallengeContainer = document.getElementById('userCashChallengeContainer'), userCashChallenge = document.getElementById('userCashChallenge');
         const topAgencies = document.getElementById('topAgencies'), topQuarters = document.getElementById('topQuarters'), topMonths = document.getElementById('topMonths');
         const modal = document.getElementById('detailsModal'), modalTitle = document.getElementById('modalTitle');
         const closeModalBtn = document.getElementById('closeModalBtn'), detailsTableBody = document.getElementById('detailsTableBody');
@@ -268,7 +276,7 @@
         
         function setupDashboard() {
             // Hide all sections by default
-            [adminSummary, adminLeaderboard, quarterlyContainer, agencyListContainer, adminChallenge, adminQuarterlyChallenge, adminTravelChallenge, userChallengeContainer].forEach(el => el.classList.add('hidden'));
+            [adminSummary, adminLeaderboard, quarterlyContainer, agencyListContainer, adminChallenge, adminQuarterlyChallenge, adminTravelChallenge, userChallengeContainer, userCashChallengeContainer].forEach(el => el.classList.add('hidden'));
 
             if (loggedInUser.agency === 'ADMIN') {
                 welcomeMessage.textContent = "Welcome, Admin!";
@@ -309,6 +317,14 @@
             userChallengeContainer.classList.remove('hidden');
             quarterlyContainer.classList.remove('hidden');
             agencyListContainer.classList.remove('hidden');
+
+            // Chester GTG specific challenge
+            if (loggedInUser.agency && loggedInUser.agency.trim().toLowerCase() === 'chester gtg') {
+                displayUserCashChallenge(filteredRecords); 
+                userCashChallengeContainer.classList.remove('hidden');
+            } else {
+                userCashChallengeContainer.classList.add('hidden');
+            }
         }
 
         function updateAdminDisplay() {
@@ -814,6 +830,82 @@
                     </div>
                 </div>
             `;
+        }
+
+        function displayUserCashChallenge(records) {
+            const cashTiers = [
+                { value: 1500000, reward: 2500 },
+                { value: 2000000, reward: 3000 },
+                { value: 2500000, reward: 3500 },
+                { value: 3000000, reward: 4500 }
+            ];
+            const currentYear = new Date().getFullYear();
+            const currentMonth = new Date().getMonth(); // 0-11
+
+            const periods = {
+                H1: { title: 'Jan - June', totalValue: 0, isCurrent: currentMonth < 6, isPast: currentMonth >= 6 },
+                H2: { title: 'July - Dec', totalValue: 0, isCurrent: currentMonth >= 6, isPast: false }
+            };
+
+            records.forEach(rec => {
+                if (!rec.submission_date) return;
+                const date = new Date(rec.submission_date);
+                if (date.getFullYear() === currentYear) {
+                    const month = date.getMonth();
+                    if (month < 6) {
+                        periods.H1.totalValue += (rec.la_pp || 0);
+                    } else {
+                        periods.H2.totalValue += (rec.la_pp || 0);
+                    }
+                }
+            });
+
+            userCashChallenge.innerHTML = Object.values(periods).map(period => {
+                if (!period.isCurrent && !period.isPast) { // Future period
+                    return `
+                        <div class="bg-slate-50 p-3 rounded-md opacity-60">
+                            <div class="flex justify-between items-center">
+                                <span class="font-semibold text-slate-700 text-sm">${period.title} (Upcoming)</span>
+                            </div>
+                            <p class="text-xs text-slate-500 mt-1">Challenge has not started yet.</p>
+                        </div>`;
+                }
+
+                let highestTier = null;
+                let nextTier = cashTiers[0];
+                for (const tier of cashTiers) {
+                    if (period.totalValue >= tier.value) {
+                        highestTier = tier;
+                    } else {
+                        nextTier = tier;
+                        break;
+                    }
+                }
+                if (period.totalValue >= cashTiers[cashTiers.length - 1].value) nextTier = null;
+
+                const progress = nextTier ? (period.totalValue / nextTier.value) * 100 : 100;
+                const reward = highestTier ? highestTier.reward : 0;
+                const statusText = period.isCurrent ? `Your Progress (${period.title})` : `${period.title} (Completed)`;
+
+                return `
+                    <div class="bg-slate-50 p-3 rounded-md">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="font-semibold text-slate-700 text-sm">${statusText}</span>
+                            <span class="font-bold ${reward > 0 ? 'text-green-600' : 'text-slate-500'} text-sm">${reward > 0 ? `Reward: ${formatCurrency(reward)}` : 'No Reward'}</span>
+                        </div>
+                        ${period.isCurrent ? `
+                        <div class="w-full bg-slate-200 rounded-full h-2.5">
+                            <div class="bg-blue-600 h-2.5 rounded-full" style="width: ${progress > 100 ? 100 : progress}%"></div>
+                        </div>
+                        <div class="text-xs text-slate-500 mt-1 text-right">
+                            ${nextTier ? `Total: ${formatCurrency(period.totalValue)} / ${formatCurrency(nextTier.value)}` : 'Max Goal Reached!'}
+                        </div>
+                        ` : `
+                        <p class="text-xs text-slate-500 mt-1">Total value submitted: ${formatCurrency(period.totalValue)}</p>
+                        `}
+                    </div>
+                `;
+            }).join('');
         }
 
         // --- Event Listeners ---
